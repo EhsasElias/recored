@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Multilingual Audio to Shopping List</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f6f8fa;
+      margin: 0;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: direction 0.3s;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      max-width: 600px;
+      width: 100%;
+      transition: all 0.3s ease;
+    }
+
+    h2 { margin-top: 0; text-align: center; color: #333; }
+
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    select {
+      padding: 0.6rem 1rem;
+      font-size: 16px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .btn-start { background-color: #28a745; color: white; }
+    .btn-stop { background-color: #dc3545; color: white; }
+    .btn:disabled { background-color: #ccc; cursor: not-allowed; }
+
+    .output-box { margin-top: 1rem; }
+
+    .label {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #444;
+    }
+
+    #result {
+      background: #eef1f5;
+      padding: 1rem;
+      border-radius: 8px;
+      font-size: 16px;
+      margin-bottom: 1rem;
+    }
+
+    ul {
+      list-style-type: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    li {
+      background: #e8f0fe;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+      font-size: 16px;
+      transition: background 0.2s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    li:hover { background: #d2e3fc; }
+
+    .play-icon {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 18px;
+      margin-left: 1rem;
+      color: #333;
+    }
+
+    @media (max-width: 480px) {
+      .controls { flex-direction: column; align-items: center; }
+      .btn, select { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🌍 Speak Your Shopping List</h2>
+
+    <div class="controls">
+      <select id="language">
+        <option value="en-US">English</option>
+        <option value="ar-SA">العربية (Arabic)</option>
+        <option value="hi-IN">हिन्दी (Hindi)</option>
+        <option value="tl-PH">Filipino (Tagalog)</option>
+        <option value="am-ET">አማርኛ (Amharic)</option>
+        <option value="so-SO">Somali</option>
+      </select>
+      <button id="start" class="btn btn-start">Start</button>
+      <button id="stop" class="btn btn-stop" disabled>Stop</button>
+    </div>
+
+    <div class="output-box">
+      <div class="label">📝 Transcribed Text:</div>
+      <div id="result">Say something like "Tomato, Potato, Onion"</div>
+
+      <div class="label">🛒 Shopping List:</div>
+      <ul id="list"></ul>
+    </div>
+  </div>
+
+  <script>
+    const startBtn = document.getElementById('start');
+    const stopBtn = document.getElementById('stop');
+    const result = document.getElementById('result');
+    const list = document.getElementById('list');
+    const languageSelect = document.getElementById('language');
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.interimResults = true;
+
+    const rtlLangs = ['ar', 'am', 'fa', 'ur', 'he'];
+
+    const browserLang = navigator.language || 'en-US';
+    const optionToSelect = Array.from(languageSelect.options).find(option =>
+      browserLang.startsWith(option.value.split('-')[0])
+    );
+    if (optionToSelect) {
+      optionToSelect.selected = true;
+      if (rtlLangs.includes(optionToSelect.value.split('-')[0])) {
+        document.body.setAttribute('dir', 'rtl');
+      }
+    }
+
+    let finalTranscript = '';
+    let availableVoices = [];
+
+    function loadVoices() {
+      availableVoices = speechSynthesis.getVoices();
+      console.log("🗣️ Available Voices:", availableVoices.map(v => `${v.lang} - ${v.name}`));
+    }
+
+    loadVoices();
+    speechSynthesis.onvoiceschanged = loadVoices;
+
+    function getVoiceForLang(lang) {
+      const exact = availableVoices.find(v => v.lang.toLowerCase() === lang.toLowerCase());
+      const partial = availableVoices.find(v => v.lang.startsWith(lang.split('-')[0]));
+      const fallback = availableVoices.find(v => v.lang.startsWith('en')) || availableVoices[0];
+
+      if (!exact && !partial) {
+        console.warn(`⚠️ No voice found for "${lang}", using fallback "${fallback?.lang}"`);
+      }
+
+      return exact || partial || fallback;
+    }
+
+    function aiNormalize(text) {
+      const patterns = [
+        { wrong: /tomatoe?s?/gi, right: "tomato" },
+        { wrong: /potatos?/gi, right: "potato" },
+        { wrong: /onionns?/gi, right: "onion" },
+        { wrong: /milck/gi, right: "milk" },
+        { wrong: /bred/gi, right: "bread" },
+        { wrong: /eggss?/gi, right: "eggs" }
+      ];
+      patterns.forEach(p => text = text.replace(p.wrong, p.right));
+      return text;
+    }
+
+    startBtn.onclick = () => {
+      recognition.lang = languageSelect.value;
+      recognition.start();
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      result.textContent = "🎧 Listening...";
+      finalTranscript = '';
+
+      if (rtlLangs.includes(recognition.lang.split('-')[0])) {
+        document.body.setAttribute('dir', 'rtl');
+      } else {
+        document.body.setAttribute('dir', 'ltr');
+      }
+    };
+
+    stopBtn.onclick = () => {
+      recognition.stop();
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+    };
+
+    recognition.onresult = (event) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
+        } else {
+          interim += transcript;
+        }
+      }
+
+      const combined = (finalTranscript + interim).trim();
+      const aiText = aiNormalize(combined);
+      result.textContent = aiText;
+
+      const items = aiText
+        .split(/\s*(,|\.|؛|،|&|und|et|and|و)\s*/i)
+        .filter(item => item && !['and', 'و', 'et', 'und', '&', ',', '.', '،', '؛'].includes(item.trim()))
+        .map(item => item.trim());
+
+      list.innerHTML = '';
+      items.forEach(item => {
+        const li = document.createElement('li');
+        const displayText = item.charAt(0).toUpperCase() + item.slice(1);
+        li.textContent = displayText;
+
+        const playBtn = document.createElement('button');
+        playBtn.innerHTML = '🔊';
+        playBtn.className = 'play-icon';
+        playBtn.setAttribute('aria-label', `Play ${displayText}`);
+        playBtn.onclick = () => {
+          const utterance = new SpeechSynthesisUtterance(displayText);
+          utterance.lang = recognition.lang;
+          utterance.voice = getVoiceForLang(recognition.lang);
+          speechSynthesis.speak(utterance);
+        };
+
+        li.appendChild(playBtn);
+        list.appendChild(li);
+      });
+    };
+  </script>
+</body>
+</html>
