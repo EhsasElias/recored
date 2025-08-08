@@ -27,7 +27,7 @@
             border-radius: 12px;
             padding: 2rem;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            max-width: 600px;
+            max-width: 100%;
             width: 100%;
             transition: all 0.3s ease;
         }
@@ -163,8 +163,8 @@
         </div>
     </div>
 
-    <script>
-        const recordBtn = document.getElementById('record');
+   <script>
+  const recordBtn = document.getElementById('record');
   const stopRecordBtn = document.getElementById('stopRecord');
   const playback = document.getElementById('playback');
   const languageSelect = document.getElementById('language');
@@ -177,13 +177,12 @@
   let transcriptText = '';
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
   if (SpeechRecognition) {
     recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-  }
 
-  if (recognition) {
     recognition.onresult = (event) => {
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -196,6 +195,8 @@
       }
       result.textContent = transcriptText + interim;
     };
+  } else {
+    alert("⚠️ This browser does not support real-time voice transcription. You can record audio, but transcription will not work. Please use Google Chrome on desktop.");
   }
 
   recordBtn.onclick = async () => {
@@ -211,7 +212,7 @@
       transcriptText = '';
 
       if (recognition) {
-        recognition.lang = languageSelect.value; // ✅ dynamic language selection
+        recognition.lang = languageSelect.value;
         recognition.start();
       }
 
@@ -229,15 +230,15 @@
         playback.src = audioUrl;
         playback.style.display = 'block';
 
-        // ✅ Multilingual-safe: split by whitespace only
-        const items = transcriptText
-  .split(/\s|،|؛|,|\band\b|\bet\b|\bund\b|and|et|und/i) // split on space, commas, etc.
-  .map(word => word.trim())
-  .filter(word =>
-    word.length > 0 &&
-    !(word === 'و') // remove the standalone Arabic "و"
-  );
+        if (!transcriptText) {
+          result.textContent = "⏺️ Recording saved. Speech-to-text is not supported on this device.";
+          return;
+        }
 
+        const items = transcriptText
+          .split(/\s|،|؛|,|\band\b|\bet\b|\bund\b|and|et|und/i)
+          .map(word => word.trim())
+          .filter(word => word.length > 0 && word !== 'و');
 
         list.innerHTML = '';
         items.forEach(word => {
@@ -262,8 +263,7 @@
       stopRecordBtn.disabled = true;
     }
   };
-    </script>
-
+</script>
 
 </body>
 
